@@ -1,8 +1,9 @@
 import { useState, useCallback, useRef } from 'react';
-import { ReactFlow } from '@xyflow/react';
+import { ReactFlow , MiniMap} from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import * as htmlToImage from 'html-to-image';
 import jsPDF from 'jspdf';
+import ThemeToggle from './Features/ThemeToggle.jsx'
 
 const initialNodes = [
   {
@@ -19,7 +20,7 @@ const initialNodes = [
   { id: 'Prathamesh Pitale', data: { label: 'Prathamesh Pitale' }, type: 'output' },
 ];
 
-function generateLayout(rootId) {
+function generateLayout(rootId, expandedNodes) {
   const nodeMap = Object.fromEntries(initialNodes.map(n => [n.id, { ...n }]));
   const levelSpacingY = 100;
   const nodeSpacingX = 180;
@@ -31,13 +32,25 @@ function generateLayout(rootId) {
     const children = node.Children || [];
 
     let x;
-    if (children.length === 0) {
+    let childXs = [];
+    
+    // if (children.length === 0 ) {
+    //   x = nextX * nodeSpacingX;
+    //   nextX++;
+    // } else {
+    //   const childXs = children.map((childId) => layoutTree(childId, depth + 1));
+    //   x = (Math.min(...childXs) + Math.max(...childXs)) / 2;
+    // }
+
+    if (expandedNodes.has(nodeId) && children.length > 0) {
+      childXs = children.map((childId) => layoutTree(childId, depth + 1));
+      x = (Math.min(...childXs) + Math.max(...childXs)) / 2;
+    } else {
       x = nextX * nodeSpacingX;
       nextX++;
-    } else {
-      const childXs = children.map((childId) => layoutTree(childId, depth + 1));
-      x = (Math.min(...childXs) + Math.max(...childXs)) / 2;
     }
+
+  
 
     positionedNodes.push({
       ...node,
@@ -45,6 +58,11 @@ function generateLayout(rootId) {
         x,
         y: depth * levelSpacingY,
       },
+      style: {
+        backgroundColor: 'white',
+        color: 'black',
+      },
+      className: 'dark:!bg-gray-700 dark:!text-white',
     });
 
     return x;
@@ -58,7 +76,7 @@ function generateLayout(rootId) {
   positionedNodes.forEach(n => (n.position.x += offsetX));
 
   const initialEdges = positionedNodes.flatMap(node => {
-    if (!node.Children) return [];
+    if (!node.Children || !expandedNodes.has(node.id) )return [];
     return node.Children.map(childId => ({
       id: `e${node.id}-${childId}`,
       source: node.id,
@@ -79,11 +97,29 @@ function generateLayout(rootId) {
 
 function Flow() {
   const [rootId, setRootId] = useState('Narayan Pitale');
-  const { nodes, edges } = generateLayout(rootId);
+  const allExpandable = initialNodes
+  .filter(n => n.Children && n.Children.length > 0)
+  .map(n => n.id);
+
+const [expandedNodes, setExpandedNodes] = useState(new Set(allExpandable));
+
+  const { nodes, edges } = generateLayout(rootId, expandedNodes);
   const reactFlowWrapper = useRef(null);
 
+  // const onNodeClick = useCallback((_, node) => {
+  //   //setRootId(node.id);
+
+  // }, []);
   const onNodeClick = useCallback((_, node) => {
-    setRootId(node.id);
+    setExpandedNodes((prev) => {
+      const updated = new Set(prev);
+      if (updated.has(node.id)) {
+        updated.delete(node.id);
+      } else {
+        updated.add(node.id);
+      }
+      return updated;
+    });
   }, []);
 
   function inlineEdgeStyles(container) {
@@ -125,28 +161,49 @@ function Flow() {
   
 
   return (
-    <div className="h-screen p-4">
-      <div className="mb-4 flex gap-4 items-center">
-        <select
-          value={rootId}
-          onChange={(e) => setRootId(e.target.value)}
-          className="p-2 border rounded"
-        >
-          {initialNodes.map((node) => (
-            <option key={node.id} value={node.id}>
-              {node.id}
-            </option>
-          ))}
-        </select>
-        <button onClick={exportToPNG} className="px-4 py-2 bg-blue-500 text-white rounded">Export PNG</button>
-        <button onClick={exportToPDF} className="px-4 py-2 bg-green-600 text-white rounded">Export PDF</button>
+    
+    // <div className="h-screen p-4 transition-colors duration-500 bg-white text-black dark:bg-gray-900 dark:text-white">
+
+    
+    <div className="h-screen p-4 bg-white dark:bg-gray-900 text-black dark:text-white">
+      
+      <div className="mb-4 flex justify-between items-center">
+        <div className="flex gap-4 items-center">
+          <select
+            value={rootId}
+            onChange={(e) => setRootId(e.target.value)}
+            className="p-2 border rounded"
+          >
+            {initialNodes.map((node) => (
+              <option key={node.id} value={node.id}>
+                {node.id}
+              </option>
+            ))}
+          </select>
+          <button onClick={exportToPNG} className="px-4 py-2 bg-blue-500 text-white rounded dark:bg-blue-700">
+            Export PNG
+          </button>
+          <button onClick={exportToPDF} className="px-4 py-2 bg-green-600 text-white rounded dark:bg-blue-700">
+            Export PDF
+          </button>
+        </div>
+
+        <div>
+          <ThemeToggle />
+        </div>
       </div>
 
-      <div className="h-full bg-white" ref={reactFlowWrapper}>
-        <ReactFlow nodes={nodes} edges={edges} fitView onNodeClick={onNodeClick} />
+        
+      
+
+      <div className="h-full bg-white dark:bg-gray-800 rounded" ref={reactFlowWrapper}>
+        <ReactFlow nodes={nodes} edges={edges} fitView onNodeClick={onNodeClick} >
+        </ReactFlow>
       </div>
     </div>
+    // </div>
   );
 }
 
 export default Flow;
+
